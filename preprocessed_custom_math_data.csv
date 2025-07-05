@@ -1,0 +1,6 @@
+problem_id,problem_text,difficulty_level,subject,solution_steps,final_answer,symbolic_complexity,step_count,dataset,text_length,operator_count
+P001,Solve for x: 2x + 5 = 13,basic,algebra,"['Subtract 5 from both sides: 2x = 8', 'Divide by 2: x = 4']",x = 4,2,2,custom,24,2
+P002,Find the derivative of f(x) = x^2 + 3x + 1,intermediate,calculus,"['Apply power rule: d/dx(x^2) = 2x', 'Apply constant rule: d/dx(3x) = 3', ""Result: f'(x) = 2x + 3""]",f'(x) = 2x + 3,4,3,custom,42,4
+P003,Calculate the area under the curve y = x^2 from x=0 to x=2,advanced,calculus,"['Set up integral: ∫₀² x² dx', 'Apply power rule: [x³/3]₀²', 'Evaluate: 8/3 - 0 = 8/3']",Area = 8/3,6,3,custom,58,4
+P004,Prove that the sum of two even numbers is even,intermediate,number_theory,"['Let a = 2k, b = 2m for integers k,m', 'a + b = 2k + 2m = 2(k + m)', 'Since k+m is integer, sum is even']",The sum is even,5,3,custom,46,0
+P005,Find the limit as x approaches 0 of (sin(x))/x,advanced,calculus,"[""Use L'Hôpital's rule"", 'd/dx(sin(x)) = cos(x), d/dx(x) = 1', 'Limit = cos(0)/1 = 1']",Limit = 1,7,3,custom,46,1
