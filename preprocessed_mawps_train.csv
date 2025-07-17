@@ -1,0 +1,9 @@
+sQuestion,lSolutions,lEquations,iIndex,category,dataset,split,problem_text,text_length,word_count,sentence_count,math_ops_count,number_count,difficulty_level,dataset_name
+A train travels 120 miles in 2 hours. What is its speed?,['60'],['120/2'],0,word_problem,mawps,train,A train travels 120 miles in 2 hours. What is its speed?,56,12,3,0,2,intermediate,mawps_train
+John has 15 apples. He gives 8 to Mary. How many does he have left?,['7'],['15-8'],1,word_problem,mawps,train,John has 15 apples. He gives 8 to Mary. How many does he have left?,67,15,4,0,2,intermediate,mawps_train
+A rectangle has length 12 and width 8. What is its area?,['96'],['12*8'],2,word_problem,mawps,train,A rectangle has length 12 and width 8. What is its area?,56,12,3,0,2,intermediate,mawps_train
+Sarah buys 5 packs of gum. Each pack has 12 pieces. How many pieces total?,['60'],['5*12'],3,word_problem,mawps,train,Sarah buys 5 packs of gum. Each pack has 12 pieces. How many pieces total?,74,15,4,0,2,intermediate,mawps_train
+There are 28 students. 15 are girls. How many are boys?,['13'],['28-15'],4,word_problem,mawps,train,There are 28 students. 15 are girls. How many are boys?,55,11,4,0,2,intermediate,mawps_train
+A car travels 180 miles in 3 hours. What is its speed?,['60'],['180/3'],5,word_problem,mawps,train,A car travels 180 miles in 3 hours. What is its speed?,54,12,3,0,2,intermediate,mawps_train
+Mike has 24 stickers. He divides them equally among 4 friends. How many does each get?,['6'],['24/4'],6,word_problem,mawps,train,Mike has 24 stickers. He divides them equally among 4 friends. How many does each get?,86,16,4,0,2,intermediate,mawps_train
+A box contains 36 chocolates arranged in 6 rows. How many chocolates per row?,['6'],['36/6'],7,word_problem,mawps,train,A box contains 36 chocolates arranged in 6 rows. How many chocolates per row?,77,14,3,0,2,intermediate,mawps_train

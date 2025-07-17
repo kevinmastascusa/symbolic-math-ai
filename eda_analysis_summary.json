@@ -1,0 +1,28 @@
+{
+  "total_samples": 38644,
+  "datasets": [
+    "gsm8k_train",
+    "gsm8k_test",
+    "mathqa_train",
+    "mathqa_test",
+    "mawps_train",
+    "mawps_test",
+    "custom"
+  ],
+  "preprocessing_features": [
+    "text_length",
+    "word_count",
+    "sentence_count",
+    "math_ops_count",
+    "number_count",
+    "difficulty_level"
+  ],
+  "analysis_completed": [
+    "Dataset Overview",
+    "Difficulty Patterns",
+    "Label Categories",
+    "Mathematical Operations",
+    "Text Complexity",
+    "Key Insights"
+  ]
+}
