@@ -61,7 +61,7 @@ class MathDatasetLoader:
         Load MathQA dataset.
         
         Args:
-            split: 'train', 'dev', or 'test'
+            split: 'train', 'validation', or 'test'
             
         Returns:
             DataFrame with math problems and solutions
@@ -273,6 +273,7 @@ class MathDatasetLoader:
         datasets['gsm8k_test'] = self.load_gsm8k('test')
         datasets['mathqa_train'] = self.load_mathqa('train')
         datasets['mathqa_test'] = self.load_mathqa('test')
+        datasets['mathqa_validation'] = self.loadmathqa('validation')
         datasets['svamp_train'] = self.load_svamp('train')
         datasets['svamp_test'] = self.load_svamp('test')
         datasets['custom'] = self.load_custom_math_dataset()
