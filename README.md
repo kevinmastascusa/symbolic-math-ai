@@ -17,7 +17,7 @@ The project addresses key challenges in AI mathematical reasoning:
 ### 🔢 **Comprehensive Dataset Support**
 - **GSM8K**: Grade School Math 8K dataset for elementary mathematical reasoning
 - **MathQA**: Mathematical question-answering dataset with diverse problem types
-- **SVAMP**:
+- **SVAMP (Simple Variations on Arithmetic Math word Problems)**: A challenge set for elementary-level Math Word Problems (MWP). An MWP consists of a short Natural Language narrative that describes a state of the world and poses a question about some unknown quantities.
 - **Custom datasets**: Support for user-defined mathematical problem datasets
 
 ### 📊 **Data Processing & Analysis**
