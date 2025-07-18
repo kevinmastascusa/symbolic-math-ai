@@ -80,9 +80,9 @@ class MathDatasetLoader:
             print(f"Error loading MathQA: {e}")
             return self._create_mathqa_sample(split)
     
-    def load_mawps(self, split: str = "train") -> pd.DataFrame:
+    def load_svamp(self, split: str = "train") -> pd.DataFrame:
         """
-        Load MAWPS (Math Word Problem Solving) dataset.
+        Load SVAMP (Simple Variations on Arithmetic Math word Problems) dataset.
         
         Args:
             split: 'train' or 'test'
@@ -91,18 +91,18 @@ class MathDatasetLoader:
             DataFrame with math word problems
         """
         try:
-            file_path = self.data_dir / f"mawps_{split}.csv"
+            file_path = self.data_dir / f"svamp_{split}.csv"
             if file_path.exists():
                 df = pd.read_csv(file_path)
-                print(f"Loaded MAWPS {split} dataset from local file")
+                print(f"Loaded SVAMP {split} dataset from local file")
                 return df
             
-            print("MAWPS dataset not found locally. Creating sample data...")
-            return self._create_mawps_sample(split)
+            print("SVAMP dataset not found locally. Creating sample data...")
+            return self._create_svamp_sample(split)
             
         except Exception as e:
-            print(f"Error loading MAWPS: {e}")
-            return self._create_mawps_sample(split)
+            print(f"Error loading svamp: {e}")
+            return self._create_svamp_sample(split)
     
     def load_custom_math_dataset(self) -> pd.DataFrame:
         """
@@ -197,8 +197,8 @@ class MathDatasetLoader:
         df['split'] = split
         return df
     
-    def _create_mawps_sample(self, split: str) -> pd.DataFrame:
-        """Create sample MAWPS data."""
+    def _create_svamp_sample(self, split: str) -> pd.DataFrame:
+        """Create sample svamp data."""
         sample_data = {
             'sQuestion': [
                 'A train travels 120 miles in 2 hours. What is its speed in miles per hour?',
@@ -226,7 +226,7 @@ class MathDatasetLoader:
         }
         
         df = pd.DataFrame(sample_data)
-        df['dataset'] = 'mawps'
+        df['dataset'] = 'svamp'
         df['split'] = split
         return df
     
@@ -273,8 +273,8 @@ class MathDatasetLoader:
         datasets['gsm8k_test'] = self.load_gsm8k('test')
         datasets['mathqa_train'] = self.load_mathqa('train')
         datasets['mathqa_test'] = self.load_mathqa('test')
-        datasets['mawps_train'] = self.load_mawps('train')
-        datasets['mawps_test'] = self.load_mawps('test')
+        datasets['svamp_train'] = self.load_svamp('train')
+        datasets['svamp_test'] = self.load_svamp('test')
         datasets['custom'] = self.load_custom_math_dataset()
         
         return datasets
