@@ -17,7 +17,7 @@ The project addresses key challenges in AI mathematical reasoning:
 ### 🔢 **Comprehensive Dataset Support**
 - **GSM8K**: Grade School Math 8K dataset for elementary mathematical reasoning
 - **MathQA**: Mathematical question-answering dataset with diverse problem types
-- **MAWPS**: Math word problems dataset for arithmetic reasoning
+- **SVAMP**:
 - **Custom datasets**: Support for user-defined mathematical problem datasets
 
 ### 📊 **Data Processing & Analysis**
