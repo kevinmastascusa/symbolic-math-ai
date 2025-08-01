@@ -1,5 +1,5 @@
 {
-  "total_samples": 40,
+  "total_samples": 47089,
   "datasets": [
     "gsm8k_train",
     "gsm8k_test",
@@ -7,8 +7,7 @@
     "mathqa_test",
     "mathqa_validation",
     "svamp_train",
-    "svamp_test",
-    "custom"
+    "svamp_test"
   ],
   "preprocessing_features": [
     "text_length",
