@@ -104,27 +104,6 @@ class MathDatasetLoader:
             print(f"Error loading svamp: {e}")
             return self._create_svamp_sample(split)
     
-    def load_custom_math_dataset(self) -> pd.DataFrame:
-        """
-        Load custom math dataset for symbolic reasoning.
-        
-        Returns:
-            DataFrame with custom math problems
-        """
-        try:
-            file_path = self.data_dir / "custom_math_dataset.csv"
-            if file_path.exists():
-                df = pd.read_csv(file_path)
-                print("Loaded custom math dataset from local file")
-                return df
-            
-            print("Custom dataset not found. Creating sample data...")
-            return self._create_custom_sample()
-            
-        except Exception as e:
-            print(f"Error loading custom dataset: {e}")
-            return self._create_custom_sample()
-    
     def _create_gsm8k_sample(self, split: str) -> pd.DataFrame:
         """Create sample GSM8K data."""
         sample_data = {
@@ -229,36 +208,7 @@ class MathDatasetLoader:
         df['dataset'] = 'svamp'
         df['split'] = split
         return df
-    
-    def _create_custom_sample(self) -> pd.DataFrame:
-        """Create custom math dataset for symbolic reasoning."""
-        sample_data = {
-            'problem_id': ['P001', 'P002', 'P003', 'P004', 'P005'],
-            'problem_text': [
-                'Solve for x: 2x + 5 = 13',
-                'Find the derivative of f(x) = x^2 + 3x + 1',
-                'Calculate the area under the curve y = x^2 from x=0 to x=2',
-                'Prove that the sum of two even numbers is even',
-                'Find the limit as x approaches 0 of (sin(x))/x'
-            ],
-            'difficulty_level': ['basic', 'intermediate', 'advanced', 'intermediate', 'advanced'],
-            'subject': ['algebra', 'calculus', 'calculus', 'number_theory', 'calculus'],
-            'solution_steps': [
-                ['Subtract 5 from both sides: 2x = 8', 'Divide by 2: x = 4'],
-                ['Apply power rule: d/dx(x^2) = 2x', 'Apply constant rule: d/dx(3x) = 3', 'Result: f\'(x) = 2x + 3'],
-                ['Set up integral: ∫₀² x² dx', 'Apply power rule: [x³/3]₀²', 'Evaluate: 8/3 - 0 = 8/3'],
-                ['Let a = 2k, b = 2m for integers k,m', 'a + b = 2k + 2m = 2(k + m)', 'Since k+m is integer, sum is even'],
-                ['Use L\'Hôpital\'s rule', 'd/dx(sin(x)) = cos(x), d/dx(x) = 1', 'Limit = cos(0)/1 = 1']
-            ],
-            'final_answer': ['x = 4', 'f\'(x) = 2x + 3', 'Area = 8/3', 'The sum is even', 'Limit = 1'],
-            'symbolic_complexity': [2, 4, 6, 5, 7],
-            'step_count': [2, 3, 3, 3, 3]
-        }
         
-        df = pd.DataFrame(sample_data)
-        df['dataset'] = 'custom'
-        return df
-    
     def get_all_datasets(self) -> Dict[str, pd.DataFrame]:
         """
         Load all available datasets.
@@ -276,7 +226,6 @@ class MathDatasetLoader:
         datasets['mathqa_validation'] = self.load_mathqa('validation')
         datasets['svamp_train'] = self.load_svamp('train')
         datasets['svamp_test'] = self.load_svamp('test')
-        datasets['custom'] = self.load_custom_math_dataset()
         
         return datasets
     
