@@ -455,7 +455,7 @@ class MathModelTrainer:
                 return_tensors="pt",
                 truncation=True,
                 max_length=self.config.max_length
-            )
+            ).to(self.model.device)  # Move inputs to model's device
             
             # Generate
             with torch.no_grad():
