@@ -105,15 +105,17 @@ class TrainingConfig:
     def __post_init__(self):
         """Validate configuration."""
         if not self.hf_token:
-            raise ValueError("Hugging Face token is required")
+            logger.warning("Hugging Face token not found. Model loading may fail.")
         
         # Create output directory
         Path(self.output_dir).mkdir(exist_ok=True)
         
         # Save config
         config_path = Path(self.output_dir) / "training_config.json"
+        config_dict = self.__dict__.copy()
+        config_dict.pop('hf_token', None)  # Exclude token from saved config
         with open(config_path, 'w') as f:
-            json.dump(self.__dict__, f, indent=2)
+            json.dump(config_dict, f, indent=2)
 
 class SymbolicMathProcessor:
     """SymPy-based symbolic math processing for math word problems."""

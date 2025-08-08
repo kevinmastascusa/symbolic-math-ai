@@ -104,6 +104,54 @@ class MathDatasetLoader:
             print(f"Error loading svamp: {e}")
             return self._create_svamp_sample(split)
     
+    def load_math500(self, split: str = "train") -> pd.DataFrame:
+        """
+        Load MATH-500 dataset.
+        
+        Args:
+            split: 'train' or 'test'
+            
+        Returns:
+            DataFrame with math problems and solutions
+        """
+        try:
+            # Try preprocessed data first
+            preprocessed_csv = self.data_dir / f"preprocessed_math500_{split}.csv"
+            preprocessed_json = self.data_dir / f"preprocessed_math500_{split}.json"
+            
+            if preprocessed_csv.exists():
+                df = pd.read_csv(preprocessed_csv)
+                print(f"Loaded preprocessed MATH-500 {split} dataset from CSV file")
+                return df
+            elif preprocessed_json.exists():
+                with open(preprocessed_json, 'r') as f:
+                    data = json.load(f)
+                df = pd.DataFrame(data)
+                print(f"Loaded preprocessed MATH-500 {split} dataset from JSON file")
+                return df
+            
+            # Try original data
+            csv_path = self.data_dir / f"math500_{split}.csv"
+            json_path = self.data_dir / f"math500_{split}.json"
+            
+            if csv_path.exists():
+                df = pd.read_csv(csv_path)
+                print(f"Loaded original MATH-500 {split} dataset from CSV file")
+                return df
+            elif json_path.exists():
+                with open(json_path, 'r') as f:
+                    data = json.load(f)
+                df = pd.DataFrame(data)
+                print(f"Loaded original MATH-500 {split} dataset from JSON file")
+                return df
+            else:
+                print("MATH-500 dataset not found locally. Creating sample data...")
+                return self._create_math500_sample(split)
+                
+        except Exception as e:
+            print(f"Error loading MATH-500: {e}")
+            return self._create_math500_sample(split)
+    
     def _create_gsm8k_sample(self, split: str) -> pd.DataFrame:
         """Create sample GSM8K data."""
         sample_data = {
@@ -208,6 +256,39 @@ class MathDatasetLoader:
         df['dataset'] = 'svamp'
         df['split'] = split
         return df
+    
+    def _create_math500_sample(self, split: str) -> pd.DataFrame:
+        """Create sample MATH-500 data."""
+        sample_data = {
+            'problem': [
+                'What is the value of x if 2x + 5 = 13?',
+                'Find the derivative of f(x) = x^2 + 3x + 1',
+                'Calculate the area of a circle with radius 5',
+                'Solve the equation: 3x - 7 = 8',
+                'What is the slope of the line y = 2x + 3?'
+            ],
+            'solution': [
+                'Subtract 5 from both sides: 2x = 8. Then divide by 2: x = 4',
+                'Apply power rule: d/dx(x^2) = 2x. Apply constant rule: d/dx(3x) = 3. So f\'(x) = 2x + 3',
+                'Area = πr^2 = π(5)^2 = 25π',
+                'Add 7 to both sides: 3x = 15. Then divide by 3: x = 5',
+                'The slope is the coefficient of x, which is 2'
+            ],
+            'answer': [
+                '4',
+                '2x + 3',
+                '25π',
+                '5',
+                '2'
+            ],
+            'subject': ['Algebra', 'Calculus', 'Geometry', 'Algebra', 'Algebra'],
+            'level': [1, 3, 2, 1, 1]
+        }
+        
+        df = pd.DataFrame(sample_data)
+        df['dataset'] = 'math500'
+        df['split'] = split
+        return df
         
     def get_all_datasets(self) -> Dict[str, pd.DataFrame]:
         """
@@ -226,6 +307,8 @@ class MathDatasetLoader:
         datasets['mathqa_validation'] = self.load_mathqa('validation')
         datasets['svamp_train'] = self.load_svamp('train')
         datasets['svamp_test'] = self.load_svamp('test')
+        datasets['math500_train'] = self.load_math500('train')
+        datasets['math500_test'] = self.load_math500('test')
         
         return datasets
     
