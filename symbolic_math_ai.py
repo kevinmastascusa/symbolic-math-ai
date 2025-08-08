@@ -180,13 +180,13 @@ class TrainingConfig:
     
     # Hugging Face settings
     hf_token: Optional[str] = os.getenv("HUGGING_FACE_HUB_TOKEN")
-    model_name: str = "microsoft/DialoGPT-small"  # Smaller model for faster training
-    output_dir: str = "./trained_model"
+    model_name: str = "mistralai/Mixtral-8x7B-Instruct-v0.1"  # Powerful model for reasoning
+    output_dir: str = "./trained_model_mixtral"
     
     # Training parameters
-    batch_size: int = 2
-    learning_rate: float = 5e-5
-    num_epochs: int = 3  # Increase epochs for early stopping
+    batch_size: int = 1  # Reduced for larger model
+    learning_rate: float = 2e-5
+    num_epochs: int = 1  # Start with 1 epoch for large models
     max_length: int = 256
     warmup_steps: int = 50
     weight_decay: float = 0.01
@@ -401,41 +401,37 @@ class MathModelTrainer:
         logger.info("Model and tokenizer loaded successfully")
         
     def prepare_datasets(self) -> Tuple[MathDataset, MathDataset]:
-        """Prepare training and validation datasets."""
-        logger.info("Loading and preparing datasets...")
+        """Prepare training and validation datasets from preprocessed files."""
+        logger.info("Loading preprocessed datasets...")
         
-        # Load all datasets
-        datasets = {
-            'gsm8k_train': self.data_loader.load_gsm8k('train'),
-            'gsm8k_test': self.data_loader.load_gsm8k('test'),
-            'mathqa_train': self.data_loader.load_mathqa('train'),
-            'mathqa_test': self.data_loader.load_mathqa('test'),
-            'svamp_train': self.data_loader.load_svamp('train'),
-            'svamp_test': self.data_loader.load_svamp('test'),
-            'math500_train': self.data_loader.load_math500('train'),
-            'math500_test': self.data_loader.load_math500('test')
+        preprocessed_files = {
+            'gsm8k_train': 'preprocessed_gsm8k_train.csv',
+            'mathqa_train': 'preprocessed_mathqa_train.csv',
+            'svamp_train': 'preprocessed_svamp_train.csv',
+            'math500_train': 'preprocessed_math500_train.csv'
         }
         
-        # Combine all training data
         all_train_data = []
         all_val_data = []
-        
-        for name, df in datasets.items():
-            if 'train' in name:
-                # Limit samples per dataset
+
+        for name, filename in preprocessed_files.items():
+            file_path = self.data_loader.data_dir / filename
+            if file_path.exists():
+                df = pd.read_csv(file_path)
                 df = df.head(self.config.max_samples_per_dataset)
-                
-                # Convert to list of dicts
                 data = df.to_dict('records')
                 
-                # Split into train/val
                 split_idx = int(len(data) * self.config.train_split)
                 all_train_data.extend(data[:split_idx])
                 all_val_data.extend(data[split_idx:])
                 
-                logger.info(f"Added {len(data)} samples from {name}")
-        
-        # Create datasets
+                logger.info(f"Loaded {len(data)} samples from {filename}")
+            else:
+                logger.warning(f"Preprocessed file not found: {filename}")
+
+        if not all_train_data:
+            raise FileNotFoundError("No preprocessed training data found. Please run preprocessing first.")
+
         train_dataset = MathDataset(all_train_data, self.tokenizer, self.config.max_length)
         val_dataset = MathDataset(all_val_data, self.tokenizer, self.config.max_length)
         
