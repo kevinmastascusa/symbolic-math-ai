@@ -62,6 +62,118 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+class TreeOfThoughtsGenerator:
+    """Generates solutions using a Tree of Thoughts approach."""
+    
+    def __init__(self, model, tokenizer, math_processor, max_depth=3, max_children=2):
+        self.model = model
+        self.tokenizer = tokenizer
+        self.math_processor = math_processor
+        self.max_depth = max_depth
+        self.max_children = max_children
+
+    def generate(self, problem: str) -> str:
+        """Generate a solution using ToT."""
+        logger.info(f"Starting ToT generation for: '{problem}'")
+        tree = {'problem': problem, 'children': [], 'score': 0, 'text': ""}
+        
+        # Explore the tree
+        solution_path = self._explore_node(tree, 0)
+        
+        if not solution_path:
+            logger.warning("ToT could not find a valid solution path.")
+            return "Could not determine a solution path."
+            
+        # Combine the steps for the final answer
+        final_answer = "\n".join([node['text'] for node in solution_path])
+        logger.info(f"ToT Final Answer: {final_answer}")
+        
+        return final_answer
+
+    def _explore_node(self, node, depth):
+        if depth >= self.max_depth:
+            return [node]
+
+        # Generate thoughts (potential next steps)
+        thoughts = self._generate_thoughts(node)
+        
+        if not thoughts:
+            return [node]
+
+        # Evaluate and score thoughts
+        for thought in thoughts:
+            thought['score'] = self._evaluate_thought(thought)
+        
+        # Select the best thoughts to expand
+        best_thoughts = sorted(thoughts, key=lambda x: x['score'], reverse=True)[:self.max_children]
+
+        # Recursively explore the best thoughts
+        best_path = []
+        for thought in best_thoughts:
+            path = self._explore_node(thought, depth + 1)
+            if path:
+                if not best_path or sum(n['score'] for n in path) > sum(n['score'] for n in best_path):
+                    best_path = path
+        
+        return [node] + best_path if best_path else [node]
+
+    def _generate_thoughts(self, node) -> List[Dict]:
+        """Generate a number of next-step thoughts from the current state."""
+        prompt = f"Problem: {node['problem']}\n"
+        if node.get('text'):
+            prompt += f"Current thought: {node['text']}\n"
+        prompt += "What is the next logical step?"
+
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+        
+        with torch.no_grad():
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=50,
+                num_return_sequences=self.max_children * 2,
+                do_sample=True,
+                temperature=0.9,
+                top_k=50,
+                pad_token_id=self.tokenizer.eos_token_id
+            )
+        
+        generated_texts = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
+        
+        thoughts = []
+        for text in generated_texts:
+            # Clean up the generated text
+            cleaned_text = text.replace(prompt, "").strip()
+            if cleaned_text:
+                thoughts.append({'problem': node['problem'], 'text': cleaned_text, 'children': [], 'score': 0})
+        
+        return thoughts
+
+    def _evaluate_thought(self, thought: Dict) -> float:
+        """Evaluate a thought based on heuristics (e.g., mathematical validity)."""
+        text = thought['text']
+        score = 0.0
+
+        # Heuristic 1: Presence of numbers from the problem
+        problem_numbers = re.findall(r'\d+', thought['problem'])
+        thought_numbers = re.findall(r'\d+', text)
+        if any(n in thought_numbers for n in problem_numbers):
+            score += 0.2
+
+        # Heuristic 2: Contains a solvable equation
+        equations = self.math_processor.extract_equations(text)
+        if equations:
+            score += 0.5
+            for eq in equations:
+                if self.math_processor.solve_equation(eq):
+                    score += 0.3 # Bonus for solvable equations
+
+        # Heuristic 3: Avoids repetitive or nonsensical phrases
+        if "The total number is" in text or "The area is" in text:
+            score -= 0.3
+            
+        return score
+
+
 @dataclass
 class TrainingConfig:
     """Configuration for model training."""
@@ -435,48 +547,29 @@ class MathModelTrainer:
         return eval_results
     
     def test_model(self, test_problems: List[str]):
-        """Test the trained model on specific problems."""
-        logger.info("Testing model on sample problems...")
+        """Test the trained model on specific problems using Tree of Thoughts."""
+        logger.info("Testing model on sample problems with ToT...")
         
         if not self.model or not self.tokenizer:
             logger.error("Model not loaded. Run setup_model_and_tokenizer() first.")
             return
-        
+
         self.model.eval()
+        
+        tot_generator = TreeOfThoughtsGenerator(
+            model=self.model,
+            tokenizer=self.tokenizer,
+            math_processor=self.math_processor,
+            max_depth=self.config.tot_max_depth,
+            max_children=self.config.tot_max_children
+        )
         
         results = []
         for problem in test_problems:
-            # Format input
-            input_text = f"Question: {problem}\nAnswer:"
-            
-            # Tokenize
-            inputs = self.tokenizer(
-                input_text,
-                return_tensors="pt",
-                truncation=True,
-                max_length=self.config.max_length
-            ).to(self.model.device)  # Move inputs to model's device
-            
-            # Generate
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=100,
-                    num_beams=3,
-                    temperature=0.7,
-                    do_sample=True,
-                    pad_token_id=self.tokenizer.eos_token_id
-                )
-            
-            # Decode response
-            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            
-            # Extract answer
-            answer = response.split("Answer:")[-1].strip()
+            answer = tot_generator.generate(problem)
             
             results.append({
                 'problem': problem,
-                'response': response,
                 'answer': answer
             })
             
