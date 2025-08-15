@@ -1,10 +1,13 @@
 from pathlib import Path
 from typing import List, Dict, Any
+import json
+import os
 
 import streamlit as st
 import torch
 import numpy as np
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from peft import PeftModel
 from typing import Tuple
 
 from data_loader import MathDatasetLoader
@@ -16,17 +19,53 @@ from symbolic_math_ai import (
 
 @st.cache_resource(show_spinner=False)
 def load_hf_model(model_dir: str):
-    tokenizer = AutoTokenizer.from_pretrained(model_dir)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModelForCausalLM.from_pretrained(
-        model_dir,
-        torch_dtype=(
-            torch.float16 if torch.cuda.is_available() else torch.float32
-        ),
-        device_map="auto" if torch.cuda.is_available() else None,
-    )
-    return tokenizer, model
+    # Try to detect if model_dir is a PEFT adapter folder (our training output)
+    training_cfg_path = Path(model_dir) / "training_config.json"
+    is_adapter_dir = training_cfg_path.exists()
+
+    if is_adapter_dir:
+        # Load base model name from training config
+        with open(training_cfg_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        base_model_name = cfg.get("model_name", "Qwen/Qwen2.5-Math-1.5B")
+
+        tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        base_model = AutoModelForCausalLM.from_pretrained(
+            base_model_name,
+            torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
+            device_map="auto" if torch.cuda.is_available() else None,
+        )
+        try:
+            model = PeftModel.from_pretrained(base_model, model_dir)
+        except RuntimeError as e:
+            import re
+            msg = str(e)
+            # Try to extract expected embedding rows from the error message
+            m = re.search(r"copying a param with shape torch.Size\(\[(\d+),\s*\d+\]\).*shape in current model is torch.Size\(\[(\d+),", msg)
+            if m:
+                expected_rows = int(m.group(1))
+                current_rows = int(m.group(2))
+                if expected_rows != current_rows:
+                    # Resize base model embeddings to match adapter expectation
+                    base_model.resize_token_embeddings(expected_rows)
+                    model = PeftModel.from_pretrained(base_model, model_dir)
+            else:
+                raise
+        return tokenizer, model
+    else:
+        # Fall back: model_dir is a full HF model directory
+        tokenizer = AutoTokenizer.from_pretrained(model_dir)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        model = AutoModelForCausalLM.from_pretrained(
+            model_dir,
+            torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
+            device_map="auto" if torch.cuda.is_available() else None,
+        )
+        return tokenizer, model
 
 
 def load_onnx_model(_: str) -> Tuple[None, None]:
@@ -101,7 +140,7 @@ def main():
     with st.sidebar:
         st.header("Model (PyTorch)")
         hf_model_dir = st.text_input(
-            "HF model dir", value="./trained_math_model_qwen"
+            "HF model dir or adapter dir", value="./trained_math_model_qwen_run2"
         )
         max_depth = st.slider("ToT max depth", 1, 6, 3)
         max_children = st.slider("ToT max children", 1, 5, 2)
