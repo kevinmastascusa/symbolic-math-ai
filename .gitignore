@@ -20,3 +20,31 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg 
+
+# Virtual environments
+.venv/
+.venv_*/
+
+# Additional Python cache
+__pycache__/
+*.pyc
+
+# Logs
+logs/
+*.log
+training.log
+
+# Checkpoints and large model files
+trained_model*/
+trained_math_model*/
+**/pytorch_model*.bin
+**/*.safetensors
+**/*.pt
+**/*.onnx
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db

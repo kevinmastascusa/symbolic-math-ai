@@ -47,6 +47,7 @@ from datasets import Dataset as HFDataset
 import sympy as sp
 from sympy import symbols, Eq, solve, simplify, sympify
 from sympy.parsing.sympy_parser import parse_expr
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
 # Import local modules
 from data_loader import MathDatasetLoader
@@ -190,6 +191,7 @@ class TrainingConfig:
     max_length: int = 256
     warmup_steps: int = 50
     weight_decay: float = 0.01
+    gradient_accumulation_steps: int = 1
     
     # Checkpointing and early stopping
     evaluation_strategy: str = "steps"
@@ -198,7 +200,7 @@ class TrainingConfig:
     save_steps: int = 100
     save_total_limit: int = 2
     load_best_model_at_end: bool = True
-    metric_for_best_model: str = "loss"
+    metric_for_best_model: str = "eval_loss"
     greater_is_better: bool = False
     early_stopping_patience: int = 3
     
@@ -209,6 +211,13 @@ class TrainingConfig:
     # Model parameters
     use_quantization: bool = True
     use_gradient_checkpointing: bool = True
+    # PEFT LoRA settings (enable when quantizing to allow fine-tuning)
+    use_lora: bool = True
+    lora_r: int = 8
+    lora_alpha: int = 16
+    lora_dropout: float = 0.05
+    # Common target modules for LLaMA/Qwen-style architectures
+    lora_target_modules: Optional[List[str]] = None
     
     # Tree of Thoughts parameters
     tot_max_depth: int = 3
@@ -372,10 +381,22 @@ class MathModelTrainer:
             self.tokenizer.pad_token = self.tokenizer.eos_token
         
         # Load model with quantization if enabled
+        # Enable TF32 on matmul for better performance without extra memory
+        if torch.cuda.is_available():
+            try:
+                torch.backends.cuda.matmul.allow_tf32 = True
+            except Exception:
+                pass
+
         model_kwargs = {
             "use_auth_token": self.config.hf_token or True,
-            "torch_dtype": torch.float16 if torch.cuda.is_available() else torch.float32
+            "torch_dtype": torch.float16 if torch.cuda.is_available() else torch.float32,
+            "low_cpu_mem_usage": True,
         }
+
+        # Allow automatic device mapping to avoid OOM during load on small GPUs
+        if torch.cuda.is_available():
+            model_kwargs["device_map"] = "auto"
         
         if self.config.use_quantization and torch.cuda.is_available():
             quantization_config = BitsAndBytesConfig(
@@ -390,10 +411,38 @@ class MathModelTrainer:
             self.config.model_name,
             **model_kwargs
         )
+
+        # If quantized, prepare for k-bit training and attach LoRA adapters
+        if self.config.use_quantization and self.config.use_lora and torch.cuda.is_available():
+            try:
+                self.model = prepare_model_for_kbit_training(self.model)
+            except Exception:
+                pass
+
+            target_modules = self.config.lora_target_modules
+            if target_modules is None:
+                # Default for LLaMA/Qwen-like models
+                target_modules = [
+                    "q_proj", "k_proj", "v_proj", "o_proj",
+                    "gate_proj", "up_proj", "down_proj"
+                ]
+
+            lora_cfg = LoraConfig(
+                r=self.config.lora_r,
+                lora_alpha=self.config.lora_alpha,
+                lora_dropout=self.config.lora_dropout,
+                bias="none",
+                task_type="CAUSAL_LM",
+                target_modules=target_modules,
+            )
+            self.model = get_peft_model(self.model, lora_cfg)
         
         # Enable gradient checkpointing after model loading
         if self.config.use_gradient_checkpointing:
             self.model.gradient_checkpointing_enable()
+            # Disable KV cache during training to reduce memory usage
+            if hasattr(self.model, "config") and hasattr(self.model.config, "use_cache"):
+                self.model.config.use_cache = False
         
         # Resize token embeddings if needed
         self.model.resize_token_embeddings(len(self.tokenizer))
@@ -466,11 +515,16 @@ class MathModelTrainer:
         if self.model is None or self.tokenizer is None:
             raise ValueError("Model or tokenizer not initialized")
 
+        # Mixed precision selection
+        use_bf16 = torch.cuda.is_available() and getattr(torch.cuda, "is_bf16_supported", lambda: False)()
+        use_fp16 = torch.cuda.is_available() and not use_bf16
+
         training_args = TrainingArguments(
             output_dir=self.config.output_dir,
             num_train_epochs=self.config.num_epochs,
             per_device_train_batch_size=self.config.batch_size,
             per_device_eval_batch_size=self.config.batch_size,
+            gradient_accumulation_steps=self.config.gradient_accumulation_steps,
             warmup_steps=self.config.warmup_steps,
             weight_decay=self.config.weight_decay,
             logging_dir='./logs',
@@ -483,7 +537,13 @@ class MathModelTrainer:
             load_best_model_at_end=self.config.load_best_model_at_end,
             metric_for_best_model=self.config.metric_for_best_model,
             greater_is_better=self.config.greater_is_better,
-            report_to="none"  # Disable wandb/tensorboard for simplicity
+            report_to="none",  # Disable wandb/tensorboard for simplicity
+            fp16=use_fp16,
+            bf16=use_bf16,
+            eval_accumulation_steps=1,
+            dataloader_pin_memory=False,
+            dataloader_num_workers=0,
+            label_names=["labels"]
         )
 
         trainer = Trainer(
@@ -491,7 +551,7 @@ class MathModelTrainer:
             args=training_args,
             train_dataset=train_dataset,
             eval_dataset=val_dataset,
-            data_collator=DataCollatorForLanguageModeling(tokenizer=self.tokenizer, mlm=False),
+            data_collator=DataCollatorForLanguageModeling(tokenizer=self.tokenizer, mlm=False, pad_to_multiple_of=8),
             preprocess_logits_for_metrics=self.preprocess_logits_for_metrics,
             compute_metrics=self.compute_metrics,
             callbacks=[EarlyStoppingCallback(early_stopping_patience=self.config.early_stopping_patience)]
@@ -516,7 +576,9 @@ class MathModelTrainer:
         training_args = TrainingArguments(
             output_dir=self.config.output_dir,
             per_device_eval_batch_size=self.config.batch_size,
-            report_to="none"
+            report_to="none",
+            dataloader_num_workers=0,
+            label_names=["labels"]
         )
 
         trainer = Trainer(
@@ -529,6 +591,12 @@ class MathModelTrainer:
         )
         
         eval_results = trainer.evaluate()
+        eval_loss = eval_results.get("eval_loss")
+        if eval_loss is not None:
+            try:
+                eval_results["perplexity"] = float(np.exp(eval_loss))
+            except Exception:
+                pass
         
         # Log results
         logger.info("Evaluation Results:")
