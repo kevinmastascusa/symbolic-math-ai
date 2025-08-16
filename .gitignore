@@ -1,5 +1,7 @@
 data/
 *.md
+!README.md
+!TODO.md
 __pycache__/
 *.pyc
 *.pyo
