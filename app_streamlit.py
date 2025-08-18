@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import List, Dict, Any
 import json
-import os
 
 import streamlit as st
 import torch
@@ -29,13 +28,21 @@ def load_hf_model(model_dir: str):
             cfg = json.load(f)
         base_model_name = cfg.get("model_name", "Qwen/Qwen2.5-Math-1.5B")
 
-        tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+        # Prefer tokenizer saved with the adapter (ensures exact vocab match)
+        if (Path(model_dir) / "tokenizer.json").exists() or (
+            Path(model_dir) / "tokenizer_config.json"
+        ).exists():
+            tokenizer = AutoTokenizer.from_pretrained(model_dir)
+        else:
+            tokenizer = AutoTokenizer.from_pretrained(base_model_name)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
         base_model = AutoModelForCausalLM.from_pretrained(
             base_model_name,
-            torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
+            torch_dtype=(
+                torch.float16 if torch.cuda.is_available() else torch.float32
+            ),
             device_map="auto" if torch.cuda.is_available() else None,
         )
         try:
@@ -44,13 +51,25 @@ def load_hf_model(model_dir: str):
             import re
             msg = str(e)
             # Try to extract expected embedding rows from the error message
-            m = re.search(r"copying a param with shape torch.Size\(\[(\d+),\s*\d+\]\).*shape in current model is torch.Size\(\[(\d+),", msg)
+            pattern = (
+                r"copying a param with shape torch.Size\(" +
+                r"\[(\d+),\s*\d+\]\)" +
+                r".*shape in current model is torch.Size\(" +
+                r"\[(\d+),"
+            )
+            m = re.search(pattern, msg)
             if m:
                 expected_rows = int(m.group(1))
                 current_rows = int(m.group(2))
-                if expected_rows != current_rows:
-                    # Resize base model embeddings to match adapter expectation
-                    base_model.resize_token_embeddings(expected_rows)
+                # Prefer tokenizer length if available; else fall back
+                target_rows = (
+                    len(tokenizer)
+                    if tokenizer is not None
+                    else expected_rows
+                )
+                if target_rows != current_rows:
+                    # Resize base model embeddings to match expectation
+                    base_model.resize_token_embeddings(target_rows)
                     model = PeftModel.from_pretrained(base_model, model_dir)
             else:
                 raise
@@ -60,11 +79,26 @@ def load_hf_model(model_dir: str):
         tokenizer = AutoTokenizer.from_pretrained(model_dir)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
+        # Be tolerant to vocab-size drift between tokenizer and model weights
         model = AutoModelForCausalLM.from_pretrained(
             model_dir,
-            torch_dtype=(torch.float16 if torch.cuda.is_available() else torch.float32),
+            torch_dtype=(
+                torch.float16 if torch.cuda.is_available() else torch.float32
+            ),
             device_map="auto" if torch.cuda.is_available() else None,
+            ignore_mismatched_sizes=True,
         )
+        try:
+            input_embeds = model.get_input_embeddings()
+            num_rows = (
+                input_embeds.weight.shape[0]
+                if hasattr(input_embeds, "weight")
+                else None
+            )
+            if num_rows is not None and num_rows != len(tokenizer):
+                model.resize_token_embeddings(len(tokenizer))
+        except Exception:
+            pass
         return tokenizer, model
 
 
@@ -114,7 +148,9 @@ def run_shap_explanation(
                 [c for c in out if (c.isdigit() or c in ['.', '-'])]
             )
             try:
-                scores.append(float(digits) if digits not in ("", "-") else 0.0)
+                scores.append(
+                    float(digits) if digits not in ("", "-") else 0.0
+                )
             except Exception:
                 scores.append(0.0)
         return np.array(scores)
@@ -140,7 +176,8 @@ def main():
     with st.sidebar:
         st.header("Model (PyTorch)")
         hf_model_dir = st.text_input(
-            "HF model dir or adapter dir", value="./trained_math_model_qwen_run2"
+            "HF model dir or adapter dir",
+            value="./trained_math_model_qwen_run2",
         )
         max_depth = st.slider("ToT max depth", 1, 6, 3)
         max_children = st.slider("ToT max children", 1, 5, 2)
@@ -176,7 +213,11 @@ def main():
         with c2:
             if st.button("Explain with SHAP"):
                 with st.spinner("Running SHAP explanation..."):
-                    shap_result = run_shap_explanation(tokenizer, model, question)
+                    shap_result = run_shap_explanation(
+                        tokenizer,
+                        model,
+                        question,
+                    )
                 if "error" in shap_result:
                     st.error(shap_result["error"])
                 else:
@@ -197,7 +238,12 @@ def main():
             for eq in eqs[:3]:
                 sol = math_processor.solve_equation(eq)
                 if sol:
-                    sols.append({"equation": eq, "solutions": [str(s) for s in sol]})
+                    sols.append(
+                        {
+                            "equation": eq,
+                            "solutions": [str(s) for s in sol],
+                        }
+                    )
             if sols:
                 st.json(sols)
         else:
@@ -209,10 +255,12 @@ def main():
         with st.expander("Summary", expanded=False):
             datasets = loader.get_all_datasets()
             summary = {k: v.shape for k, v in datasets.items()}
-            st.json({
-                k: {"rows": v[0], "cols": v[1]}
-                for k, v in summary.items()
-            })
+            st.json(
+                {
+                    k: {"rows": v[0], "cols": v[1]}
+                    for k, v in summary.items()
+                }
+            )
 
         st.write("Preview of preprocessed CSVs (if present)")
         for fname in [

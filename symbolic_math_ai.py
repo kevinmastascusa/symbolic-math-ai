@@ -561,6 +561,19 @@ class MathModelTrainer:
         
         logger.info(f"Training completed! Model saved to {self.config.output_dir}")
         trainer.save_model()
+        # Ensure tokenizer and config (including vocab_size) are saved with the adapter
+        try:
+            if self.tokenizer is not None:
+                self.tokenizer.save_pretrained(self.config.output_dir)
+        except Exception:
+            pass
+        try:
+            if hasattr(self.model, "config"):
+                self.model.config.vocab_size = len(self.tokenizer) if self.tokenizer else getattr(self.model.config, "vocab_size", None)
+                # Persist updated config
+                self.model.config.save_pretrained(self.config.output_dir)
+        except Exception:
+            pass
         
         return self.model
     
