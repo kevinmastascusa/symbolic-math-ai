@@ -180,6 +180,9 @@ def main():
     st.set_page_config(page_title="Symbolic Math AI - ToT + SHAP")
     st.title("Symbolic Math AI")
     st.caption("Training pipeline with ToT, SymPy, and SHAP")
+    st.markdown(
+        "[![GitHub Repo](https://img.shields.io/badge/GitHub-symbolic--math--ai-181717?logo=github)](https://github.com/kevinmastascusa/symbolic-math-ai)"
+    )
 
     with st.sidebar:
         st.header("Model (PyTorch)")
