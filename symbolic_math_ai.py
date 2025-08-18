@@ -131,30 +131,63 @@ class TreeOfThoughtsGenerator:
 
     def _generate_thoughts(self, node) -> List[Dict]:
         """Generate a number of next-step thoughts from the current state."""
-        prompt = f"Problem: {node['problem']}\n"
-        if node.get('text'):
-            prompt += f"Current thought: {node['text']}\n"
-        prompt += "What is the next logical step?"
-
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+        # Build a chat-style prompt when supported (Qwen)
+        if hasattr(self.tokenizer, "apply_chat_template"):
+            user_content = (
+                f"Problem: {node['problem']}\n"
+                + (f"Current thought: {node['text']}\n" if node.get('text') else "")
+                + "What is the next logical step?"
+            )
+            messages = [
+                {"role": "system", "content": "You are a helpful math tutor. Reason step by step."},
+                {"role": "user", "content": user_content},
+            ]
+            prompt = self.tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+        else:
+            prompt = f"Problem: {node['problem']}\n"
+            if node.get('text'):
+                prompt += f"Current thought: {node['text']}\n"
+            prompt += "What is the next logical step?"
+            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
         
         with torch.no_grad():
+            # Use a single beam for single-child ToT to avoid duplicate variants
+            num_beams = 1 if self.max_children <= 1 else min(4, self.max_children * 2)
             outputs = self.model.generate(
                 **inputs,
-                max_new_tokens=128,
-                num_return_sequences=self.max_children * 2,
-                do_sample=True,
-                temperature=0.9,
-                top_k=50,
-                pad_token_id=self.tokenizer.eos_token_id
+                max_new_tokens=48,
+                num_beams=num_beams,
+                num_return_sequences=num_beams,
+                do_sample=False,
+                no_repeat_ngram_size=4,
+                repetition_penalty=1.15,
+                pad_token_id=self.tokenizer.eos_token_id,
             )
-        
-        generated_texts = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
+
+        # Decode only generated tokens to avoid echoing prompt/template
+        try:
+            input_len = inputs["input_ids"].shape[-1]
+            gen_only = outputs[:, input_len:]
+            decoded = self.tokenizer.batch_decode(gen_only, skip_special_tokens=True)
+        except Exception:
+            decoded = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
         
         thoughts = []
-        for text in generated_texts:
+        for text in decoded:
             # Clean up the generated text
             cleaned_text = text.replace(prompt, "").strip()
+            for role in ("system", "user", "assistant"):
+                if cleaned_text.lower().startswith(role + ":"):
+                    cleaned_text = cleaned_text.split(":", 1)[-1].strip()
+            # Strip spurious artifacts like repeated 'Asphalt' tokens
+            try:
+                cleaned_text = re.sub(r"(?:\bAsphalt\b[\s\-·,.;:]*)+", "", cleaned_text, flags=re.IGNORECASE)
+                cleaned_text = re.sub(r"\n{2,}", "\n", cleaned_text).strip()
+            except Exception:
+                pass
             if cleaned_text:
                 thoughts.append({'problem': node['problem'], 'text': cleaned_text, 'children': [], 'score': 0})
         
@@ -259,18 +292,29 @@ class SymbolicMathProcessor:
     def extract_equations(self, text: str) -> List[str]:
         """Extract mathematical equations from text."""
         import re
-        patterns = [
-            r'\b(\w+)\s*=\s*([\w\s\+\-\*\/\(\)\d\.]+)',
+        # More permissive equality pattern to capture full LHS and RHS expressions
+        eq_pattern = r'([A-Za-z0-9\.\s\+\-\*\/\(\)\^]+?)\s*=\s*([A-Za-z0-9\.\s\+\-\*\/\(\)\^]+)'
+        other_patterns = [
             r'(\d+[\+\-\*\/]\d+)',
             r'(\d+\s*[\+\-\*\/]\s*\d+)',
             r'([\d\.]+\s*[\+\-\*\/]\s*[\d\.]+)'
         ]
-        
-        equations = []
-        for pattern in patterns:
+
+        equations: List[str] = []
+
+        # Handle equations with '=' first, join both sides
+        for lhs, rhs in re.findall(eq_pattern, text):
+            lhs_clean = lhs.strip()
+            rhs_clean = rhs.strip()
+            if lhs_clean and rhs_clean:
+                equations.append(f"{lhs_clean} = {rhs_clean}")
+
+        # Handle simple arithmetic expressions as fallbacks
+        for pattern in other_patterns:
             matches = re.findall(pattern, text)
-            equations.extend([match if isinstance(match, str) else match[0] for match in matches])
-        
+            for m in matches:
+                equations.append(m if isinstance(m, str) else m[0])
+
         return list(set(equations))
     
     def parse_expression(self, expr_str: str) -> Optional[sp.Expr]:
@@ -285,10 +329,6 @@ class SymbolicMathProcessor:
     def solve_equation(self, equation: str, variable: str = 'x') -> List[sp.Expr]:
         """Solve an equation for a given variable."""
         try:
-            eq = self.parse_expression(equation)
-            if eq is None:
-                return []
-            
             var = symbols(variable)
             if '=' in equation:
                 lhs, rhs = equation.split('=')
@@ -297,8 +337,11 @@ class SymbolicMathProcessor:
                 if lhs_expr is not None and rhs_expr is not None:
                     eq = Eq(lhs_expr, rhs_expr)
                     return solve(eq, var)
-            
-            return solve(eq, var)
+            else:
+                expr = self.parse_expression(equation)
+                if expr is None:
+                    return []
+                return solve(expr, var)
         except:
             return []
 

@@ -124,7 +124,11 @@ def run_decoding(
 
 
 def run_shap_explanation(
-    tokenizer, model, question: str, num_samples: int = 20
+    tokenizer,
+    model,
+    question: str,
+    num_samples: int = 20,
+    max_new_tokens: int = 32,
 ) -> Dict[str, Any]:
     try:
         import shap
@@ -142,6 +146,7 @@ def run_shap_explanation(
                 tokenizer,
                 model,
                 f"Question: {text}\nAnswer:",
+                max_new_tokens=max_new_tokens,
             )
             # Simple numeric extraction heuristic for a scalar score
             digits = ''.join(
@@ -182,6 +187,8 @@ def main():
         max_depth = st.slider("ToT max depth", 1, 6, 3)
         max_children = st.slider("ToT max children", 1, 5, 2)
         st.checkbox("Enable SHAP explanation (slow)", value=False)
+        shap_samples = st.slider("SHAP samples", 5, 50, 10, step=5)
+        shap_max_tokens = st.slider("SHAP max tokens", 8, 64, 32, step=8)
 
     # Load model (PyTorch-only)
     tokenizer, model = load_hf_model(hf_model_dir)
@@ -217,6 +224,8 @@ def main():
                         tokenizer,
                         model,
                         question,
+                        num_samples=shap_samples,
+                        max_new_tokens=shap_max_tokens,
                     )
                 if "error" in shap_result:
                     st.error(shap_result["error"])
