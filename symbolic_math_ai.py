@@ -87,6 +87,17 @@ class TreeOfThoughtsGenerator:
             
         # Combine the steps for the final answer
         final_answer = "\n".join([node['text'] for node in solution_path])
+        # Try to compute a concrete symbolic solution as a footer
+        try:
+            equations = self.math_processor.extract_equations(problem)
+            if equations:
+                sols = self.math_processor.solve_equation(equations[0])
+                if sols:
+                    final_answer = (
+                        f"{final_answer}\nSolution: {equations[0]} -> {sols[0]}"
+                    )
+        except Exception:
+            pass
         logger.info(f"ToT Final Answer: {final_answer}")
         
         return final_answer
@@ -130,7 +141,7 @@ class TreeOfThoughtsGenerator:
         with torch.no_grad():
             outputs = self.model.generate(
                 **inputs,
-                max_new_tokens=50,
+                max_new_tokens=128,
                 num_return_sequences=self.max_children * 2,
                 do_sample=True,
                 temperature=0.9,
