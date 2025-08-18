@@ -1,6 +1,9 @@
 from pathlib import Path
 from typing import List, Dict, Any
 import json
+import sympy as sp
+from sympy import Eq
+from sympy import latex as sympy_latex
 
 import streamlit as st
 import torch
@@ -217,6 +220,9 @@ def main():
                     answer = tot.generate(question)
                 st.success("Answer")
                 st.write(answer)
+                # Persist for downstream LaTeX rendering of steps
+                st.session_state["last_answer"] = answer
+                st.session_state["last_question"] = question
         with c2:
             if st.button("Explain with SHAP"):
                 with st.spinner("Running SHAP explanation..."):
@@ -242,21 +248,62 @@ def main():
         st.subheader("SymPy Extraction")
         eqs = math_processor.extract_equations(question)
         if eqs:
-            st.write("Detected equations:", eqs[:5])
+            st.write("Detected equations:")
+            st.code("\n".join(eqs[:5]))
+            st.write("Solutions (text):")
             sols = []
             for eq in eqs[:3]:
                 sol = math_processor.solve_equation(eq)
                 if sol:
-                    sols.append(
-                        {
-                            "equation": eq,
-                            "solutions": [str(s) for s in sol],
-                        }
-                    )
+                    sols.extend([f"x = {str(s)}" for s in sol])
             if sols:
-                st.json(sols)
+                st.write("\n".join(sols))
         else:
             st.info("No equations detected.")
+
+        st.subheader("LaTeX Rendering")
+        # Render equations from question in LaTeX
+        if eqs:
+            st.caption("From question")
+            for eq in eqs[:5]:
+                rendered = False
+                try:
+                    if "=" in eq:
+                        lhs, rhs = eq.split("=", 1)
+                        lhs_expr = math_processor.parse_expression(lhs.strip())
+                        rhs_expr = math_processor.parse_expression(rhs.strip())
+                        if lhs_expr is not None and rhs_expr is not None:
+                            st.latex(sympy_latex(Eq(lhs_expr, rhs_expr)))
+                            rendered = True
+                except Exception:
+                    pass
+                if not rendered:
+                    st.code(eq)
+
+        # Render LaTeX for steps from last ToT answer
+        last_answer = st.session_state.get("last_answer")
+        if last_answer:
+            st.caption("From reasoning steps")
+            for line in [ln.strip() for ln in last_answer.splitlines() if ln.strip()]:
+                # Try to render equations or expressions
+                done = False
+                try:
+                    if "=" in line:
+                        lhs, rhs = line.split("=", 1)
+                        lhs_expr = math_processor.parse_expression(lhs.strip())
+                        rhs_expr = math_processor.parse_expression(rhs.strip())
+                        if lhs_expr is not None and rhs_expr is not None:
+                            st.latex(sympy_latex(Eq(lhs_expr, rhs_expr)))
+                            done = True
+                    if not done:
+                        expr = math_processor.parse_expression(line)
+                        if expr is not None:
+                            st.latex(sympy_latex(expr))
+                            done = True
+                except Exception:
+                    pass
+                if not done:
+                    st.write(line)
 
     with tab_dataset:
         st.subheader("Preprocessed Datasets")
