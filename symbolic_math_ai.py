@@ -98,6 +98,23 @@ class TreeOfThoughtsGenerator:
                     )
         except Exception:
             pass
+        # If SymPy produced a numeric answer, drop any contradictory 'x = ...' lines from ToT text
+        try:
+            import re as _re
+            m = _re.search(r"Solution:\s*([^=]+)=\s*([^\n]+)->\s*([^\n]+)$", final_answer)
+            if m:
+                sympy_ans = m.group(3).strip()
+                # Remove any lines ending with a different 'x = value'
+                lines = []
+                for line in final_answer.splitlines():
+                    if _re.search(r"\bx\s*=\s*", line):
+                        if sympy_ans not in line:
+                            continue
+                    lines.append(line)
+                final_answer = "\n".join(lines)
+        except Exception:
+            pass
+
         logger.info(f"ToT Final Answer: {final_answer}")
         
         return final_answer
