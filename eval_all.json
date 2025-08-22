@@ -1,0 +1,57 @@
+{
+  "model_dir": ".\\trained_math_model_qwen_run2",
+  "overall_exact_match": 0.29428571428571426,
+  "total": 700,
+  "correct": 206,
+  "overall_metrics": {
+    "bleu": 4.233158050189412,
+    "meteor": 0.13060322561036883,
+    "rouge1": 0.15527594960246277,
+    "rouge2": 0.06206233439329296,
+    "rougeL": 0.11101319477232514
+  },
+  "overall_reasoning": {
+    "rs_equations": 1777,
+    "rs_examples_with_any_eq": 504,
+    "rs_solvable": 33,
+    "rs_consistent": 2
+  },
+  "per_dataset": {
+    "gsm8k": {
+      "exact_match": 0.325,
+      "total": 200,
+      "correct": 65,
+      "rs_equations": 590,
+      "rs_examples_with_any_eq": 145,
+      "rs_solvable": 3,
+      "rs_consistent": 1
+    },
+    "mathqa": {
+      "exact_match": 0.0,
+      "total": 200,
+      "correct": 0,
+      "rs_equations": 483,
+      "rs_examples_with_any_eq": 120,
+      "rs_solvable": 21,
+      "rs_consistent": 0
+    },
+    "svamp": {
+      "exact_match": 0.625,
+      "total": 200,
+      "correct": 125,
+      "rs_equations": 479,
+      "rs_examples_with_any_eq": 170,
+      "rs_solvable": 0,
+      "rs_consistent": 0
+    },
+    "math500": {
+      "exact_match": 0.16,
+      "total": 100,
+      "correct": 16,
+      "rs_equations": 225,
+      "rs_examples_with_any_eq": 69,
+      "rs_solvable": 9,
+      "rs_consistent": 1
+    }
+  }
+}

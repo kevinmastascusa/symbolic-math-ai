@@ -168,11 +168,29 @@ def run_shap_explanation(
         shap.maskers.Text(tokenizer.sep_token or ' '),
     )
     shap_values = explainer([question], max_evals=num_samples)
+
+    # Try to build a token-level visualization figure
+    fig = None
+    try:
+        import matplotlib.pyplot as plt  # type: ignore
+        plt.figure()
+        # Newer SHAP versions
+        try:
+            import shap as _sh
+            _sh.plots.text(shap_values[0], show=False)
+        except Exception:
+            # Older SHAP fallback
+            _ = shap_values
+        fig = plt.gcf()
+    except Exception:
+        fig = None
+
     return {
         "base_values": getattr(shap_values, "base_values", None),
         "values": getattr(shap_values, "values", None),
         "data": getattr(shap_values, "data", None),
         "output_names": getattr(shap_values, "output_names", None),
+        "fig": fig,
     }
 
 
@@ -192,8 +210,11 @@ def main():
         )
         max_depth = st.slider("ToT max depth", 1, 6, 3)
         max_children = st.slider("ToT max children", 1, 5, 2)
-        st.checkbox("Enable SHAP explanation (slow)", value=False)
-        shap_samples = st.slider("SHAP samples", 5, 50, 10, step=5)
+        enable_shap = st.checkbox("Enable SHAP explanation (slow)", value=False)
+        fast_shap = st.checkbox("Fast SHAP mode (fewer samples)", value=True)
+        shap_samples = st.slider(
+            "SHAP samples", 5, 50, 10 if fast_shap else 20, step=5
+        )
         shap_max_tokens = st.slider("SHAP max tokens", 8, 64, 32, step=8)
 
     # Load model (PyTorch-only)
@@ -227,7 +248,7 @@ def main():
                 st.session_state["last_answer"] = answer
                 st.session_state["last_question"] = question
         with c2:
-            if st.button("Explain with SHAP"):
+            if st.button("Explain with SHAP", disabled=not enable_shap):
                 with st.spinner("Running SHAP explanation..."):
                     shap_result = run_shap_explanation(
                         tokenizer,
@@ -246,6 +267,8 @@ def main():
                         else np.array(shap_result["values"]).shape
                     )
                     st.write("Values shape:", shape_val)
+                    if shap_result.get("fig") is not None:
+                        st.pyplot(shap_result["fig"], clear_figure=True)
 
         st.divider()
         st.subheader("SymPy Extraction")
