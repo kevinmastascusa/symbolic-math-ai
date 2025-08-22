@@ -144,6 +144,8 @@ class TreeOfThoughtsGenerator:
 
         # Recursively explore the best thoughts
         best_path = []
+        # Attach children for visualization
+        node['children'] = best_thoughts
         for thought in best_thoughts:
             path = self._explore_node(thought, depth + 1)
             if path:
