@@ -397,30 +397,88 @@ def main():
                 edges: List[Edge] = []
 
                 def add_node(n, idx: int) -> str:
-                    label = (n.get("text") or "[root]")[:40]
+                    label = (n.get("text") or "[root]")[:60]
                     node_id = f"n{idx}"
                     nodes.append(Node(id=node_id, label=label))
                     return node_id
 
-                # BFS traversal to build small graph
+                # BFS traversal to build graph (cap to avoid oversized render)
                 queue = [(last_tree, -1)]
                 idx = 0
                 id_map = {}
-                while queue and idx < 50:
+                while queue and idx < 200:
                     cur, parent = queue.pop(0)
                     cur_id = add_node(cur, idx)
                     id_map[id(cur)] = cur_id
-                    if parent >= 0:
+                    if parent >= 0 and parent in id_map:
                         edges.append(Edge(source=id_map[parent], target=cur_id))
-                    for ch in cur.get("children", [])[:5]:
+                    for ch in cur.get("children", [])[:8]:
                         queue.append((ch, id(cur)))
                     idx += 1
 
-                config = Config(width=800, height=300, directed=True, physics=False)
+                config = Config(width=1200, height=700, directed=True, physics=False)
                 agraph(nodes=nodes, edges=edges, config=config)
             except Exception:
                 # Fallback simple text view
                 st.text("ToT path:\n" + "\n".join([p.get("text", "") for p in last_path if p]))
+
+            # High-resolution static export (PNG/SVG)
+            try:
+                import networkx as nx  # type: ignore
+                import matplotlib.pyplot as plt  # type: ignore
+                from io import BytesIO
+
+                # Build a NetworkX graph from the tree
+                G = nx.DiGraph()
+                labels = {}
+                queue = [(last_tree, None)]
+                idx = 0
+                while queue and idx < 400:
+                    cur, parent = queue.pop(0)
+                    nid = f"n{idx}"
+                    G.add_node(nid)
+                    labels[nid] = (cur.get("text") or "[root]")[:40]
+                    if parent is not None:
+                        G.add_edge(parent, nid)
+                    for ch in cur.get("children", [])[:10]:
+                        queue.append((ch, nid))
+                    idx += 1
+
+                pos = nx.spring_layout(G, k=0.8, seed=42)
+                fig, ax = plt.subplots(figsize=(12, 8), dpi=150)
+                nx.draw_networkx_edges(G, pos, ax=ax, arrows=True, width=1, alpha=0.5)
+                nx.draw_networkx_nodes(G, pos, ax=ax, node_size=500, node_color="#7db3ff")
+                nx.draw_networkx_labels(G, pos, labels=labels, font_size=7, ax=ax)
+                ax.axis("off")
+
+                # PNG buffer
+                buf_png = BytesIO()
+                fig.savefig(buf_png, format="png", dpi=300, bbox_inches="tight")
+                buf_png.seek(0)
+
+                # SVG buffer
+                buf_svg = BytesIO()
+                fig.savefig(buf_svg, format="svg", bbox_inches="tight")
+                buf_svg.seek(0)
+                plt.close(fig)
+
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.download_button(
+                        "Download ToT graph (PNG, 300 DPI)",
+                        data=buf_png.getvalue(),
+                        file_name="tot_graph.png",
+                        mime="image/png",
+                    )
+                with c2:
+                    st.download_button(
+                        "Download ToT graph (SVG)",
+                        data=buf_svg.getvalue(),
+                        file_name="tot_graph.svg",
+                        mime="image/svg+xml",
+                    )
+            except Exception:
+                pass
 
     with tab_dataset:
         st.subheader("Preprocessed Datasets")
