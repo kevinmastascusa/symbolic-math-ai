@@ -444,21 +444,49 @@ def main():
                         queue.append((ch, nid))
                     idx += 1
 
-                pos = nx.spring_layout(G, k=0.8, seed=42)
-                fig, ax = plt.subplots(figsize=(12, 8), dpi=150)
-                nx.draw_networkx_edges(G, pos, ax=ax, arrows=True, width=1, alpha=0.5)
+                import numpy as _np
+                import textwrap as _tw
+
+                # Wrap labels to reduce overlap and increase readability
+                def _wrap(s: str, width: int = 28, max_lines: int = 6) -> str:
+                    lines = _tw.wrap(s, width=width)
+                    if len(lines) > max_lines:
+                        lines = lines[:max_lines]
+                        if lines:
+                            lines[-1] = (lines[-1][: max(0, width - 1)] + "…")
+                    return "\n".join(lines) if lines else s
+
+                labels = {k: _wrap(v) for k, v in labels.items()}
+
+                n_nodes = max(1, G.number_of_nodes())
+                # Layout spacing proportional to graph size
+                k_space = 1.2 / _np.sqrt(n_nodes)
+                pos = nx.spring_layout(G, k=k_space, iterations=300, seed=42)
+
+                # Dynamic figure size for dense graphs
+                fig_w = min(max(16, n_nodes * 0.9), 64)
+                fig_h = min(max(12, n_nodes * 0.7), 48)
+                fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=200)
+                nx.draw_networkx_edges(G, pos, ax=ax, arrows=True, width=0.8, alpha=0.5)
                 nx.draw_networkx_nodes(G, pos, ax=ax, node_size=500, node_color="#7db3ff")
-                nx.draw_networkx_labels(G, pos, labels=labels, font_size=7, ax=ax)
+                nx.draw_networkx_labels(
+                    G,
+                    pos,
+                    labels=labels,
+                    font_size=8,
+                    ax=ax,
+                    bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8),
+                )
                 ax.axis("off")
 
                 # PNG buffer
                 buf_png = BytesIO()
-                fig.savefig(buf_png, format="png", dpi=300, bbox_inches="tight")
+                fig.savefig(buf_png, format="png", dpi=400, bbox_inches="tight", pad_inches=1.0)
                 buf_png.seek(0)
 
                 # SVG buffer
                 buf_svg = BytesIO()
-                fig.savefig(buf_svg, format="svg", bbox_inches="tight")
+                fig.savefig(buf_svg, format="svg", bbox_inches="tight", pad_inches=1.0)
                 buf_svg.seek(0)
                 plt.close(fig)
 
