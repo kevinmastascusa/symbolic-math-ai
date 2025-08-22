@@ -151,33 +151,51 @@ def run_shap_explanation(
                 f"Question: {text}\nAnswer:",
                 max_new_tokens=max_new_tokens,
             )
-            # Simple numeric extraction heuristic for a scalar score
-            digits = ''.join(
-                [c for c in out if (c.isdigit() or c in ['.', '-'])]
-            )
+            # Extract FINAL numeric answer (last number), not all digits
             try:
-                scores.append(
-                    float(digits) if digits not in ("", "-") else 0.0
-                )
+                import re as _re
+                nums = _re.findall(r"[-+]?\d*\.?\d+", out)
+                score = float(nums[-1]) if nums else 0.0
             except Exception:
-                scores.append(0.0)
+                score = 0.0
+            scores.append(score)
         return np.array(scores)
 
-    explainer = shap.Explainer(
-        f,
-        shap.maskers.Text(tokenizer.sep_token or ' '),
-    )
+    # Prefer tokenizer-aware text masker (HF subword tokens) if available
+    try:
+        hf_tokenize = getattr(tokenizer, "tokenize", None)
+        masker = shap.maskers.Text(
+            hf_tokenize if callable(hf_tokenize) else (tokenizer.sep_token or " ")
+        )
+    except Exception:
+        masker = shap.maskers.Text(" ")
+
+    explainer = shap.Explainer(f, masker)
     shap_values = explainer([question], max_evals=num_samples)
 
-    # Try to build a token-level visualization figure
+    # Token list for optional table view
+    tokens: List[str] = []
+    try:
+        if callable(getattr(tokenizer, "tokenize", None)):
+            tokens = tokenizer.tokenize(question)
+    except Exception:
+        tokens = []
+
+    # Try to build a token-level visualization (HTML preferred for text plots)
     fig = None
+    html = None
     try:
         import matplotlib.pyplot as plt  # type: ignore
         plt.figure()
         # Newer SHAP versions
         try:
             import shap as _sh
-            _sh.plots.text(shap_values[0], show=False)
+            try:
+                # Preferred: HTML object we can embed in Streamlit
+                html = _sh.plots.text(shap_values[0], display=False)
+            except Exception:
+                # Fallback to matplotlib backend
+                _sh.plots.text(shap_values[0], show=False)
         except Exception:
             # Older SHAP fallback
             _ = shap_values
@@ -185,12 +203,36 @@ def run_shap_explanation(
     except Exception:
         fig = None
 
+    # Optional token-level attribution table
+    token_table = None
+    try:
+        import pandas as pd  # type: ignore
+        vals = getattr(shap_values, "values", None)
+        if vals is not None:
+            arr = np.array(vals)
+            arr1 = arr[0] if arr.ndim >= 2 else arr
+            length = arr1.shape[-1]
+            if tokens and len(tokens) == length:
+                token_table = pd.DataFrame({
+                    "token": tokens,
+                    "attribution": arr1.tolist(),
+                })
+            else:
+                token_table = pd.DataFrame({
+                    "index": list(range(length)),
+                    "attribution": arr1.tolist(),
+                })
+    except Exception:
+        token_table = None
+
     return {
         "base_values": getattr(shap_values, "base_values", None),
         "values": getattr(shap_values, "values", None),
         "data": getattr(shap_values, "data", None),
         "output_names": getattr(shap_values, "output_names", None),
         "fig": fig,
+        "html": html,
+        "token_table": token_table,
     }
 
 
@@ -267,8 +309,18 @@ def main():
                         else np.array(shap_result["values"]).shape
                     )
                     st.write("Values shape:", shape_val)
-                    if shap_result.get("fig") is not None:
+                    # Prefer HTML plot when available
+                    if shap_result.get("html") is not None:
+                        try:
+                            from streamlit.components.v1 import html as st_html
+                            st_html(str(shap_result["html"]), height=300, scrolling=True)
+                        except Exception:
+                            pass
+                    elif shap_result.get("fig") is not None:
                         st.pyplot(shap_result["fig"], clear_figure=True)
+                    # Token table view (debug attribution granularity)
+                    if shap_result.get("token_table") is not None:
+                        st.dataframe(shap_result["token_table"].head(50))
 
         st.divider()
         st.subheader("SymPy Extraction")
