@@ -93,31 +93,56 @@ class TreeOfThoughtsGenerator:
             
         # Combine the steps for the final answer
         final_answer = "\n".join([node['text'] for node in solution_path])
-        # Try to compute a concrete symbolic solution as a footer
+        # Try to compute a concrete symbolic solution and override any contradictory text
         try:
             equations = self.math_processor.extract_equations(problem)
+            sympy_solutions = []
             if equations:
                 sols = self.math_processor.solve_equation(equations[0])
                 if sols:
-                    final_answer = (
-                        f"{final_answer}\nSolution: {equations[0]} -> {sols[0]}"
-                    )
-        except Exception:
-            pass
-        # If SymPy produced a numeric answer, drop any contradictory 'x = ...' lines from ToT text
-        try:
-            import re as _re
-            m = _re.search(r"Solution:\s*([^=]+)=\s*([^\n]+)->\s*([^\n]+)$", final_answer)
-            if m:
-                sympy_ans = m.group(3).strip()
-                # Remove any lines ending with a different 'x = value'
-                lines = []
+                    sympy_solutions = [str(s) for s in sols]
+
+            if sympy_solutions:
+                import re as _re
+                import sympy as _sp
+
+                # Helper: numeric comparison with tolerance for various formats
+                def _values_match(v_text: str, sol_texts: list[str]) -> bool:
+                    try:
+                        v_expr = _sp.sympify(v_text)
+                        for s in sol_texts:
+                            s_expr = _sp.sympify(s)
+                            if _sp.simplify(v_expr - s_expr) == 0:
+                                return True
+                    except Exception:
+                        pass
+                    # Fallback float compare
+                    try:
+                        v_float = float(_sp.N(v_expr))  # type: ignore[name-defined]
+                        for s in sol_texts:
+                            try:
+                                s_float = float(_sp.N(_sp.sympify(s)))
+                                if abs(v_float - s_float) < 1e-6:
+                                    return True
+                            except Exception:
+                                continue
+                    except Exception:
+                        pass
+                    return False
+
+                # Remove any lines that assert an x = value inconsistent with SymPy
+                cleaned_lines: list[str] = []
                 for line in final_answer.splitlines():
-                    if _re.search(r"\bx\s*=\s*", line):
-                        if sympy_ans not in line:
+                    m_line = _re.search(r"\bx\s*=\s*([^\s,;]+)", line)
+                    if m_line:
+                        if not _values_match(m_line.group(1), sympy_solutions):
                             continue
-                    lines.append(line)
-                final_answer = "\n".join(lines)
+                    cleaned_lines.append(line)
+                final_answer = "\n".join(cleaned_lines)
+
+                # Append canonical final answer from SymPy
+                sol_str = ", ".join(sympy_solutions)
+                final_answer = f"{final_answer}\nFinal answer (SymPy): x = {sol_str}"
         except Exception:
             pass
 

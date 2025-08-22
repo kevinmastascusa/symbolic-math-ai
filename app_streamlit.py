@@ -395,9 +395,12 @@ def main():
 
                 nodes: List[Node] = []
                 edges: List[Edge] = []
+                depth_map: Dict[int, int] = {}
 
-                def add_node(n, idx: int) -> str:
-                    label = (n.get("text") or "[root]")[:60]
+                def add_node(n, idx: int, depth: int) -> str:
+                    label_raw = n.get("text") or "[root]"
+                    label = (f"Step {depth}: " + label_raw) if depth > 0 else "[root]"
+                    label = label[:80]
                     node_id = f"n{idx}"
                     nodes.append(Node(id=node_id, label=label))
                     return node_id
@@ -406,17 +409,22 @@ def main():
                 queue = [(last_tree, -1)]
                 idx = 0
                 id_map = {}
+                depth_map[id(last_tree)] = 0
                 while queue and idx < 200:
                     cur, parent = queue.pop(0)
-                    cur_id = add_node(cur, idx)
+                    depth = depth_map.get(id(cur), 0)
+                    cur_id = add_node(cur, idx, depth)
                     id_map[id(cur)] = cur_id
                     if parent >= 0 and parent in id_map:
                         edges.append(Edge(source=id_map[parent], target=cur_id))
+                    # Keep child order deterministic and small
                     for ch in cur.get("children", [])[:8]:
+                        depth_map[id(ch)] = depth + 1
                         queue.append((ch, id(cur)))
                     idx += 1
 
-                config = Config(width=1200, height=700, directed=True, physics=False)
+                # Use hierarchical layout for legible ordering
+                config = Config(width=1200, height=700, directed=True, physics=False, hierarchical=True)
                 agraph(nodes=nodes, edges=edges, config=config)
             except Exception:
                 # Fallback simple text view
@@ -433,40 +441,61 @@ def main():
                 labels = {}
                 queue = [(last_tree, None)]
                 idx = 0
+                depth_attr: Dict[str, int] = {}
                 while queue and idx < 400:
                     cur, parent = queue.pop(0)
                     nid = f"n{idx}"
                     G.add_node(nid)
-                    labels[nid] = (cur.get("text") or "[root]")[:40]
+                    depth = depth_map.get(id(cur), 0)
+                    depth_attr[nid] = depth
+                    label_raw = cur.get("text") or "[root]"
+                    labels[nid] = (f"Step {depth}: " + label_raw) if depth > 0 else "[root]"
                     if parent is not None:
                         G.add_edge(parent, nid)
                     for ch in cur.get("children", [])[:10]:
                         queue.append((ch, nid))
+                        depth_map[id(ch)] = depth + 1
                     idx += 1
 
                 import numpy as _np
                 import textwrap as _tw
 
-                # Wrap labels to reduce overlap and increase readability
-                def _wrap(s: str, width: int = 28, max_lines: int = 6) -> str:
+                # Wrap labels to reduce overlap; do NOT truncate (no ellipsis)
+                def _wrap(s: str, width: int = 40, max_lines: int = 50) -> str:
                     lines = _tw.wrap(s, width=width)
+                    if not lines:
+                        return s
                     if len(lines) > max_lines:
-                        lines = lines[:max_lines]
-                        if lines:
-                            lines[-1] = (lines[-1][: max(0, width - 1)] + "…")
-                    return "\n".join(lines) if lines else s
+                        # Expand max_lines generously to avoid cutting text
+                        max_lines = len(lines)
+                    return "\n".join(lines[:max_lines])
 
                 labels = {k: _wrap(v) for k, v in labels.items()}
 
                 n_nodes = max(1, G.number_of_nodes())
-                # Layout spacing proportional to graph size
-                k_space = 1.2 / _np.sqrt(n_nodes)
-                pos = nx.spring_layout(G, k=k_space, iterations=300, seed=42)
+                # Prefer layered layout by depth for readability
+                for n, d in depth_attr.items():
+                    G.nodes[n]["layer"] = d
+                try:
+                    # Deterministic layered grid positions by depth
+                    from collections import defaultdict as _dd
+                    levels = _dd(list)
+                    ordered_nodes = list(G.nodes())  # preserves insertion order
+                    for nid in ordered_nodes:
+                        levels[depth_attr.get(nid, 0)].append(nid)
+                    dx, dy = 3.0, 2.0
+                    pos = {}
+                    for depth, nodes_at_depth in sorted(levels.items()):
+                        for j, nid in enumerate(nodes_at_depth):
+                            pos[nid] = (depth * dx, -j * dy)
+                except Exception:
+                    k_space = 1.2 / _np.sqrt(n_nodes)
+                    pos = nx.spring_layout(G, k=k_space, iterations=300, seed=42)
 
                 # Dynamic figure size for dense graphs
                 fig_w = min(max(16, n_nodes * 0.9), 64)
                 fig_h = min(max(12, n_nodes * 0.7), 48)
-                fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=200)
+                fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=220)
                 nx.draw_networkx_edges(G, pos, ax=ax, arrows=True, width=0.8, alpha=0.5)
                 nx.draw_networkx_nodes(G, pos, ax=ax, node_size=500, node_color="#7db3ff")
                 nx.draw_networkx_labels(
@@ -477,16 +506,26 @@ def main():
                     ax=ax,
                     bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8),
                 )
+                # Expand axes margins so long labels are not clipped
+                xs = _np.array([p[0] for p in pos.values()])
+                ys = _np.array([p[1] for p in pos.values()])
+                if xs.size and ys.size:
+                    xspan = max(xs.max() - xs.min(), 1.0)
+                    yspan = max(ys.max() - ys.min(), 1.0)
+                    margin = max(xspan, yspan) * 0.2 + 1.0
+                    ax.set_xlim(xs.min() - margin, xs.max() + margin)
+                    ax.set_ylim(ys.min() - margin, ys.max() + margin)
+                ax.margins(0.2)
                 ax.axis("off")
 
                 # PNG buffer
                 buf_png = BytesIO()
-                fig.savefig(buf_png, format="png", dpi=400, bbox_inches="tight", pad_inches=1.0)
+                fig.savefig(buf_png, format="png", dpi=450, bbox_inches="tight", pad_inches=2.0)
                 buf_png.seek(0)
 
                 # SVG buffer
                 buf_svg = BytesIO()
-                fig.savefig(buf_svg, format="svg", bbox_inches="tight", pad_inches=1.0)
+                fig.savefig(buf_svg, format="svg", bbox_inches="tight", pad_inches=2.0)
                 buf_svg.seek(0)
                 plt.close(fig)
 
