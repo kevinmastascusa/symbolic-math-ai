@@ -289,6 +289,8 @@ def main():
                 # Persist for downstream LaTeX rendering of steps
                 st.session_state["last_answer"] = answer
                 st.session_state["last_question"] = question
+                st.session_state["last_tot_tree"] = getattr(tot, "last_tree", None)
+                st.session_state["last_tot_path"] = getattr(tot, "last_path", None)
         with c2:
             if st.button("Explain with SHAP", disabled=not enable_shap):
                 with st.spinner("Running SHAP explanation..."):
@@ -382,6 +384,43 @@ def main():
                     pass
                 if not done:
                     st.write(line)
+
+        # ToT Visualization
+        last_tree = st.session_state.get("last_tot_tree")
+        last_path = st.session_state.get("last_tot_path")
+        if last_tree and last_path:
+            st.subheader("ToT Step Flow")
+            try:
+                from streamlit_agraph import agraph, Node, Edge, Config  # type: ignore
+
+                nodes: List[Node] = []
+                edges: List[Edge] = []
+
+                def add_node(n, idx: int) -> str:
+                    label = (n.get("text") or "[root]")[:40]
+                    node_id = f"n{idx}"
+                    nodes.append(Node(id=node_id, label=label))
+                    return node_id
+
+                # BFS traversal to build small graph
+                queue = [(last_tree, -1)]
+                idx = 0
+                id_map = {}
+                while queue and idx < 50:
+                    cur, parent = queue.pop(0)
+                    cur_id = add_node(cur, idx)
+                    id_map[id(cur)] = cur_id
+                    if parent >= 0:
+                        edges.append(Edge(source=id_map[parent], target=cur_id))
+                    for ch in cur.get("children", [])[:5]:
+                        queue.append((ch, id(cur)))
+                    idx += 1
+
+                config = Config(width=800, height=300, directed=True, physics=False)
+                agraph(nodes=nodes, edges=edges, config=config)
+            except Exception:
+                # Fallback simple text view
+                st.text("ToT path:\n" + "\n".join([p.get("text", "") for p in last_path if p]))
 
     with tab_dataset:
         st.subheader("Preprocessed Datasets")

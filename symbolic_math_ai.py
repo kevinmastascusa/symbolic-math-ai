@@ -72,6 +72,9 @@ class TreeOfThoughtsGenerator:
         self.math_processor = math_processor
         self.max_depth = max_depth
         self.max_children = max_children
+        # Introspective state for visualization
+        self.last_tree = None
+        self.last_path = None
 
     def generate(self, problem: str) -> str:
         """Generate a solution using ToT."""
@@ -80,6 +83,9 @@ class TreeOfThoughtsGenerator:
         
         # Explore the tree
         solution_path = self._explore_node(tree, 0)
+        # Persist for downstream visualization
+        self.last_tree = tree
+        self.last_path = solution_path
         
         if not solution_path:
             logger.warning("ToT could not find a valid solution path.")
