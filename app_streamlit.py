@@ -397,8 +397,42 @@ def main():
                 edges: List[Edge] = []
                 depth_map: Dict[int, int] = {}
 
+                # Compute verified SymPy solutions for sanitization
+                verified_solutions: List[str] = []
+                try:
+                    last_q = st.session_state.get("last_question", "")
+                    _eqs = math_processor.extract_equations(last_q) if last_q else []
+                    if _eqs:
+                        _sols = math_processor.solve_equation(_eqs[0])
+                        verified_solutions = [str(s) for s in _sols]
+                except Exception:
+                    verified_solutions = []
+
+                # Helper to remove contradictory 'x = ...' claims
+                def _values_match(v_text: str, sol_texts: List[str]) -> bool:
+                    try:
+                        import sympy as _sp  # type: ignore
+                        v_expr = _sp.sympify(v_text)
+                        for s in sol_texts:
+                            if _sp.simplify(v_expr - _sp.sympify(s)) == 0:
+                                return True
+                    except Exception:
+                        pass
+                    return False
+
+                def _sanitize_label(text: str) -> str:
+                    import re as _re  # local import to avoid top-level dependency in Streamlit cloud
+                    if not verified_solutions:
+                        return text
+                    # Remove any x = value fragments that don't match SymPy solutions
+                    def _repl(m: "_re.Match[str]") -> str:
+                        val = m.group(1)
+                        return m.group(0) if _values_match(val, verified_solutions) else ""
+                    return _re.sub(r"\bx\s*=\s*([^\s,;]+)", _repl, text)
+
                 def add_node(n, idx: int, depth: int) -> str:
                     label_raw = n.get("text") or "[root]"
+                    label_raw = _sanitize_label(label_raw)
                     label = (f"Step {depth}: " + label_raw) if depth > 0 else "[root]"
                     label = label[:80]
                     node_id = f"n{idx}"
@@ -449,6 +483,7 @@ def main():
                     depth = depth_map.get(id(cur), 0)
                     depth_attr[nid] = depth
                     label_raw = cur.get("text") or "[root]"
+                    label_raw = _sanitize_label(label_raw)
                     labels[nid] = (f"Step {depth}: " + label_raw) if depth > 0 else "[root]"
                     if parent is not None:
                         G.add_edge(parent, nid)
