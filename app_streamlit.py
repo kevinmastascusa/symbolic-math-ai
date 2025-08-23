@@ -17,6 +17,22 @@ from symbolic_math_ai import (
     SymbolicMathProcessor,
     TreeOfThoughtsGenerator,
 )
+def _guess_logo_path() -> str | None:
+    """Return a likely logo path if present in the repo."""
+    for p in [
+        Path("assets") / "logo.png",
+        Path("assets") / "logo.jpg",
+        Path("assets") / "logo.jpeg",
+        Path("assets") / "logo.svg",
+        Path("logo.png"),
+        Path("logo.jpg"),
+        Path("logo.jpeg"),
+        Path("logo.svg"),
+    ]:
+        if p.exists():
+            return str(p)
+    return None
+
 
 
 @st.cache_resource(show_spinner=False)
@@ -237,8 +253,23 @@ def run_shap_explanation(
 
 
 def main():
-    st.set_page_config(page_title="Symbolic Math AI - ToT + SHAP")
-    st.title("Symbolic Math AI")
+    # Resolve logo (if any) before page_config
+    detected_logo = _guess_logo_path()
+    page_icon = detected_logo if (detected_logo and detected_logo.lower().endswith((".png", ".jpg", ".jpeg"))) else "🧮"
+    st.set_page_config(page_title="Symbolic Math AI - ToT + SHAP", page_icon=page_icon)
+
+    # Top header with optional logo
+    if detected_logo:
+        c_logo, c_title = st.columns([1, 6])
+        with c_logo:
+            try:
+                st.image(detected_logo, caption=None, width=72)
+            except Exception:
+                pass
+        with c_title:
+            st.title("Symbolic Math AI")
+    else:
+        st.title("Symbolic Math AI")
     st.caption("Training pipeline with ToT, SymPy, and SHAP")
     st.markdown(
         "[![GitHub Repo](https://img.shields.io/badge/GitHub-symbolic--math--ai-181717?logo=github)](https://github.com/kevinmastascusa/symbolic-math-ai)"
