@@ -1,5 +1,12 @@
 # Symbolic Math Reasoning Assistant (SMRA)
 
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit&logoColor=white)
+![SymPy](https://img.shields.io/badge/SymPy-1.13+-3B5526)
+![Transformers](https://img.shields.io/badge/Transformers-4.53+-FFBF00)
+![License](https://img.shields.io/badge/License-Research-blue)
+![Status](https://img.shields.io/badge/Status-Working%20prototype-brightgreen)
+
 A Symbolic Math Reasoning Assistant designed to improve the accuracy and transparency of multi-step mathematical problem-solving in generative AI models. Built to enable robust symbolic reasoning, reduce hallucinations, and provide clear step-by-step explanations for mathematical problems.
 
 ## Project Overview
@@ -38,6 +45,24 @@ The project addresses key challenges in AI mathematical reasoning:
 - Sample data generation for testing
 - Comprehensive dataset statistics and insights
 
+## Quickstart
+
+### Run the app (Windows)
+
+```bat
+\.venv_app\Scripts\python -m streamlit run app_streamlit.py --server.headless=true
+```
+
+If you prefer a clean setup:
+
+```bat
+python -m venv .venv_app
+\.venv_app\Scripts\pip install -r requirements.txt
+\.venv_app\Scripts\python -m streamlit run app_streamlit.py
+```
+
+Figures are exported to `trained_math_model_qwen_run2/` by `make_evaluation_diagram.py`.
+
 ## Installation
 
 ### Prerequisites
@@ -72,6 +97,17 @@ The project requires the following key packages:
 - `jupyter>=1.0.0` - Interactive notebook environment
 
 See `requirements.txt` for the complete list of dependencies.
+
+## Results (current)
+
+- Overall EM: **29.4%**
+- Per‑dataset EM: GSM8K **32.5%**, SVAMP **62.5%**, MATH‑500 **16.0%**, MathQA **0.0%** (format/schema mismatch).
+- Reasoning diagnostics (examples with any equation): GSM8K **72.5%**, MathQA **60.0%**, SVAMP **85.0%**, MATH‑500 **69.0%**.
+
+Generated figures (see folder `trained_math_model_qwen_run2/`):
+- `eval_scoreboard.(svg|png)` — overall metrics table
+- `eval_datasets.(svg|png)` — per‑dataset EM bars
+- `eval_reasoning.(svg|png)` — rs_* reasoning stats
 
 ## Usage Examples
 
@@ -216,6 +252,12 @@ This project is currently under development. Please check back for license infor
 ### Project Maintainer
 
 - **Kevin Mastascusa** - [@kevinmastascusa](https://github.com/kevinmastascusa)
+
+### Contributors
+
+- **Kevin Mastascusa**
+- **Jiky Dong**
+- **Ian Powrie**
 
 ### Support the Project
 
