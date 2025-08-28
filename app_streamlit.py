@@ -279,7 +279,7 @@ def main():
         st.header("Model (PyTorch)")
         hf_model_dir = st.text_input(
             "HF model dir or adapter dir",
-            value="./trained_math_model_qwen_run2",
+            value="Kevinmastascusa/qwen2p5-math-1p5b-merged",
         )
         max_depth = st.slider("ToT max depth", 1, 6, 3)
         max_children = st.slider("ToT max children", 1, 5, 2)
