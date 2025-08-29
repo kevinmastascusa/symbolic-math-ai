@@ -25,7 +25,7 @@ The project addresses key challenges in AI mathematical reasoning:
 - **GSM8K**: Grade School Math 8K dataset for elementary mathematical reasoning
 - **MathQA**: Mathematical question-answering dataset with diverse problem types
 - **SVAMP (Simple Variations on Arithmetic Math word Problems)**: A challenge set for elementary-level Math Word Problems (MWP). An MWP consists of a short Natural Language narrative that describes a state of the world and poses a question about some unknown quantities.
-- **Custom datasets**: Support for user-defined mathematical problem datasets
+- **Math 500 **: Contains 500 high-school-level math competition problems.
 
 ### 📊 **Data Processing & Analysis**
 - Automated data loading and preprocessing pipelines
@@ -143,11 +143,6 @@ print("\nSample GSM8K problem:")
 print(gsm8k_train['question'].iloc[0])
 print(f"Answer: {gsm8k_train['answer'].iloc[0]}")
 
-# For custom dataset with different column names
-custom_data = loader.load_custom_math_dataset()
-print(f"\nSample Custom problem:")
-print(custom_data['problem_text'].iloc[0])
-print(f"Answer: {custom_data['final_answer'].iloc[0]}")
 ```
 
 ### Jupyter Notebook Workflows
@@ -168,17 +163,6 @@ To run the notebooks:
 ```bash
 jupyter notebook 01_data_preprocessing.ipynb
 ```
-
-### Custom Dataset Integration
-
-```python
-# Create custom math dataset
-custom_data = loader.load_custom_math_dataset()
-
-# Save processed datasets
-loader.save_datasets(datasets)
-```
-
 ## Contributing
 
 We welcome contributions to improve the Symbolic Math Reasoning Assistant! Here's how to get started:
